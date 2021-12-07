@@ -6,10 +6,10 @@ import (
 	"fmt"
 )
 
-//Store provides all functions to execute db queries and transactions
+//SQLStore provides all functions to execute SQL queries and transactions
 type Store struct {
-	*Queries
 	db *sql.DB
+	*Queries
 }
 
 func NewStore(db *sql.DB) *Store {
