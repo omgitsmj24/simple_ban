@@ -40,9 +40,25 @@ func RandomMoney() int64 {
 	return RandomInt(0, 10000)
 }
 
-//RandomCurrency generates a random currency code
+// RandomCurrency generates a random currency code
 func RandomCurrency() string {
-	currencies := []string{"EUR", "USD", "CAD"}
+	currencies := []string{USD, EUR, CAD}
 	n := len(currencies)
 	return currencies[rand.Intn(n)]
+}
+
+// Constants for all supported currencies
+const (
+	USD = "USD"
+	EUR = "EUR"
+	CAD = "CAD"
+)
+
+// IsSupportedCurrency returns true if the currency is supported
+func IsSupportedCurrency(currency string) bool {
+	switch currency {
+	case USD, EUR, CAD:
+		return true
+	}
+	return false
 }
