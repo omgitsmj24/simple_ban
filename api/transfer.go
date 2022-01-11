@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,17 +10,25 @@ import (
 	db "simplebank/db/sqlc"
 )
 
-type createTransferRequest struct {
+type transferRequest struct {
 	FromAccountID int64  `json:"from_account" binding:"required,min=1"`
 	ToAccountID   int64  `json:"to_account" binding:"required,min=1"`
-	Amount        int64  `json:"amount" binding:"required, gt=0"`
-	Currency      string `json:"currency" binding:"required, curency"`
+	Amount        int64  `json:"amount" binding:"required,gt=0"`
+	Currency      string `json:"currency" binding:"required,oneof=USD EUR CAD"`
 }
 
 func (server *Server) createTranfer(ctx *gin.Context) {
-	var req createTransferRequest
+	var req transferRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	if !server.validAccount(ctx, req.FromAccountID, req.Currency) {
+		return
+	}
+
+	if !server.validAccount(ctx, req.ToAccountID, req.Currency) {
 		return
 	}
 
@@ -29,60 +38,31 @@ func (server *Server) createTranfer(ctx *gin.Context) {
 		Amount:        req.Amount,
 	}
 
-	transfer, err := server.store.CreateTransfer(ctx, arg)
+	result, err := server.store.CreateTransfer(ctx, arg)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
-	ctx.JSON(http.StatusOK, transfer)
+	ctx.JSON(http.StatusOK, result)
 }
 
-type getTransferRequest struct {
-	ID int64 `uri:"id" binding:"required,min=1"`
-}
-
-func (server *Server) getTransfer(ctx *gin.Context) {
-	var req getTransferRequest
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
-		return
-	}
-
-	account, err := server.store.GetTransfer(ctx, req.ID)
+func (server *Server) validAccount(ctx *gin.Context, accountID int64, currency string) bool {
+	account, err := server.store.GetAccount(ctx, accountID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			ctx.JSON(http.StatusNotFound, errorResponse(err))
-			return
+			return false
 		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-		return
+		return false
 	}
-	ctx.JSON(http.StatusOK, account)
-}
 
-type listTransferRequest struct {
-	PageID   int32 `form:"page_id" binding:"required,min=1"`
-	PageSize int32 `form:"page_size" binding:"required,min=5,max=10"`
-}
-
-func (server *Server) listTransfer(ctx *gin.Context) {
-	var req listTransferRequest
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	if account.Currency != currency {
+		err := fmt.Errorf("account [%d] currency mismatch %s vs %s", accountID, account.Currency, currency)
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
-		return
+		return false
 	}
 
-	arg := db.ListTransfersParams{
-		Limit:  req.PageSize,
-		Offset: (req.PageID - 1) * req.PageSize,
-	}
-
-	accounts, err := server.store.ListTransfers(ctx, arg)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-		return
-	}
-
-	ctx.JSON(http.StatusOK, accounts)
+	return true
 }
